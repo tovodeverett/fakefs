@@ -20,7 +20,7 @@ module FakeFS
       fs.entries
     end
 
-    def find(path)
+    def find_old(path)
       parts = path_parts(normalize_path(path))
       return fs if parts.empty? # '/'
 
@@ -28,6 +28,17 @@ module FakeFS
         parts = path_parts(normalize_path(pattern))
         find_recurser(fs, parts).flatten
       end
+
+      case entries.length
+      when 0 then nil
+      when 1 then entries.first
+      else entries
+      end
+    end
+
+    def find(path)
+      matcher = Globber::PatternParser.build_matcher(normalize_path(path))
+      entries = matcher.nil? ? [fs] : matcher.find(fs)
 
       case entries.length
       when 0 then nil

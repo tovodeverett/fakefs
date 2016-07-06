@@ -26,6 +26,18 @@ module FakeFS
       "parent:#{parent.to_s.inspect} size:#{@entries.size})"
     end
 
+    def inspect_deep
+      "(FakeDir name:#{name.inspect} " +
+        "parent:#{parent.to_s.inspect} size:#{@entries.size})\n" +
+        ( entries.map do |e|
+            if e.respond_to?(:inspect_deep)
+              e.inspect_deep.split(/\n/).map { |l| "  #{l}\n" }.join
+            else
+              "  #{e.inspect}\n"
+            end
+          end.join )
+    end
+
     def clone(parent = nil)
       clone = Marshal.load(Marshal.dump(self))
       clone.entries.each do |value|

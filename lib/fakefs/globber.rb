@@ -1,6 +1,122 @@
 module FakeFS
   # Handles globbing for FakeFS.
   module Globber
+    module PatternParser
+      extend self
+
+      def build_matcher(pattern)
+        matcher = nil
+
+        Globber.path_components(pattern).reverse.each do |part|
+          matcher = Matcher.new(part, matcher)
+        end
+
+        return matcher
+      end
+    end
+
+    class Matcher
+      attr_accessor :descendent
+
+# This permits replacing Matcher.new without affecting child classes
+      class << self
+        alias :__new__ :new
+
+        def inherited(subclass)
+          class << subclass
+            alias :new :__new__
+          end
+        end
+      end
+
+      def self.new(pattern, descendent=nil)
+        case pattern
+        when '**'
+          if descendent.nil?
+            SimplePattern.new('*', descendent)
+          else
+            DirRecursor.new(descendent)
+          end
+        when /\A\{.*\}\Z/
+          Alternator.new(pattern, descendent)
+        else
+          SimplePattern.new(pattern, descendent)
+        end
+      end
+
+      def matches(entry)
+        if entry.is_a?(FakeDir) || ( entry.is_a?(FakeSymlink) && entry.entry.is_a?(FakeDir) )
+          _matches(entry)
+        else
+          []
+        end
+      end
+
+      def _matches(dir)
+        raise NotImplementedError.new("#{self.class.name}#_matches is an abstract method.")
+      end
+
+      def find(dir)
+        if leaf?
+          matches(dir)
+        else
+          matches(dir).map { |m| descendent.find(m) }.flatten
+        end
+      end
+
+      def leaf?
+        descendent.nil?
+      end
+
+      class DirRecursor < Matcher
+        def initialize(descendent)
+          @descendent = descendent
+        end
+
+        def _matches(dir)
+          subdirs = dir.entries.select { |f| f.is_a?(FakeDir) }
+          ([dir] + subdirs.map { |d| matches(d) }).flatten
+        end
+      end
+
+      class Alternator < Matcher
+        attr_reader :matchers
+
+        def initialize(pattern, descendent)
+          @matchers = Globber.expand(pattern).map do |subpattern|
+            Globber::PatternParser.build_matcher(subpattern)
+          end
+          @descendent = descendent
+        end
+
+        def _matches(dir)
+          matchers.map { |m| m.find(dir) }.flatten
+        end
+      end
+
+      class SimplePattern < Matcher
+        attr_reader :pattern
+
+        def initialize(pattern, descendent)
+          @pattern = pattern
+          @descendent = descendent
+        end
+
+        def pattern=(pattern)
+          @pattern = pattern
+          @regexp = nil
+        end
+
+        def regexp
+          @regexp ||= Globber.regexp(pattern)
+        end
+
+        def _matches(dir)
+          dir.matches(regexp)
+        end
+      end
+    end
+
     extend self
 
     def expand(pattern)
