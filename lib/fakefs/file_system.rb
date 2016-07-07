@@ -38,7 +38,7 @@ module FakeFS
 
     def find(path)
       matcher = Globber::PatternParser.build_matcher(normalize_path(path))
-      entries = matcher.nil? ? [fs] : matcher.find(fs)
+      entries = matcher.nil? ? [fs] : matcher.find(fs).uniq
 
       case entries.length
       when 0 then nil

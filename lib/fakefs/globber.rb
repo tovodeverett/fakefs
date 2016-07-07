@@ -30,7 +30,55 @@ module FakeFS
           end
           Matcher::Alternator.new(matchers)
         else
-          Matcher::Regexp.new(Globber.regexp(pattern), descendent)
+          alternatives = split_multidir_alternation_pattern(pattern)
+          if alternatives.length > 1
+            matchers = alternatives.map do |alternative|
+              build_matcher(alternative, descendent)
+            end
+            Matcher::Alternator.new(matchers)
+          else
+            Matcher::Regexp.new(Globber.regexp(pattern), descendent)
+          end
+        end
+      end
+
+      def split_multidir_alternation_pattern(pattern)
+        if pattern =~ /\{/
+          pre_alternation = ''
+          multidir_alternation = nil
+          post_alternation = nil
+
+          while pattern.length > 0
+            unless pattern =~ /\A(?:[^{}]+|(?<re>\{(?:(?>[^{}]+)|\g<re>)*\}))/
+              raise StandardError.new("Failed to parse '#{pattern}'")
+            end
+            chunk = Regexp.last_match[0]
+            pattern = Regexp.last_match.post_match
+            if chunk =~ /\A\{(.*\/.*)\}\Z/
+              multidir_alternation = Regexp.last_match[1]
+              post_alternation = pattern
+              pattern = ''
+            else
+              pre_alternation += chunk
+            end
+          end
+
+          if multidir_alternation.nil?
+            return [pattern]
+          else
+            alternates = []
+            while multidir_alternation.length > 0
+              unless multidir_alternation =~ /\A[^{},]*(?<re>\{(?:(?>[^{}]+)|\g<re>)*\})?[^{},]*(?:,|\Z)/
+                raise StandardError.new("Failed to parse '#{multidir_alternation}'")
+              end
+              chunk = Regexp.last_match[0]
+              multidir_alternation = Regexp.last_match.post_match
+              alternates.push(chunk.sub(/,\Z/, ''))
+            end
+            return alternates.map { |a| pre_alternation + a + post_alternation }
+          end
+        else
+          return [pattern]
         end
       end
     end

@@ -1173,6 +1173,25 @@ class FakeFSTest < Minitest::Test
     assert_equal ['/one/two/three'], Dir['/one/**/three']
   end
 
+  def test_dir_glob_handles_multidir_bash_brace
+    FileUtils.mkdir_p '/one/two/three'
+    File.open('/zero.rb', 'w')
+    File.open('/one/two/three/four.rb', 'w')
+    File.open('/one/five.rb', 'w')
+    assert_equal ['/one/five.rb', '/zero.rb'], Dir['{,*,*/*}.rb']
+  end
+
+  def test_dir_glob_handles_multidir_bash_brace_with_recursive_glob
+    FileUtils.mkdir_p '/one/two/three'
+    FileUtils.mkdir_p '/notone/two/three'
+    File.open('/zero.rb', 'w')
+    File.open('/one/two/three/four.rb', 'w')
+    File.open('/one/five.rb', 'w')
+    File.open('/notone/two/three/four.rb', 'w')
+    File.open('/notone/five.rb', 'w')
+    assert_equal ['/notone/five.rb', '/one/five.rb', '/one/two/three/four.rb'], Dir['{*/*,one/**/*}.rb']
+  end
+
   def test_dir_recursive_glob_ending_in_wildcards_returns_both_files_and_dirs
     FileUtils.mkdir_p '/one/two/three'
     File.open('/one/two/three/four.rb', 'w')
